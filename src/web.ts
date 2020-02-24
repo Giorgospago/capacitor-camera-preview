@@ -1,5 +1,5 @@
 import { WebPlugin } from "@capacitor/core";
-import { CameraPreviewPlugin } from "./definitions";
+import {CameraPreviewPlugin, StreamVideoOptions} from "./definitions";
 
 export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   constructor() {
@@ -9,34 +9,58 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     });
   }
 
-  async start(options: { parent: string, className: string }): Promise<any> {
+  private streamOptions: StreamVideoOptions = {
+    audio: false,
+    camera: "rear"
+  };
+
+  async start(options: { parent: string, className: string, position: "rear"|"front" }): Promise<any> {
     return new Promise((resolve, reject) => {
-      const video = document.getElementById("video");
-      const parent = document.getElementById(options.parent);
+      try {
+        let video = <HTMLVideoElement>document.getElementById("video");
+        const parent = document.getElementById(options.parent);
 
-      if (!video) {
-        const videoElement = document.createElement("video");
-        videoElement.id = "video";
-        videoElement.setAttribute("class", options.className || "")
-
-        parent.appendChild(videoElement);
-
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          // Not adding `{ audio: true }` since we only want video now
-          navigator.mediaDevices.getUserMedia({ video: true }).then(
-            function(stream) {
-              //video.src = window.URL.createObjectURL(stream);
-              videoElement.srcObject = stream;
-              videoElement.play();
-              resolve();
-            },
-            err => {
-              reject(err);
-            }
-          );
+        if (!video) {
+          video = <HTMLVideoElement>document.createElement("video");
+          video.id = "video";
+          video.setAttribute("class", options.className || "");
+          parent.appendChild(video);
         }
-      } else {
-        reject("camera already started");
+
+        this.streamOptions = {
+          audio: false,
+          camera: (options.position || "rear")
+        };
+        this.streamToVideoElement(this.streamOptions);
+
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  private async streamToVideoElement(options: StreamVideoOptions) {
+    return new Promise((resolve: () => void, reject: (arg0: string) => void) => {
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const userMediaOptions = {
+            video: (options.camera === "front") ? {facingMode: "user"} : {facingMode: {exact: "environment"}},
+            audio: options.audio || false,
+          };
+          const video = <HTMLVideoElement>document.getElementById("video");
+          navigator.mediaDevices.getUserMedia(userMediaOptions).then((stream) => {
+            video.srcObject = stream;
+            video.play();
+            resolve();
+          }, err => {
+            reject(err);
+          });
+        } else {
+          reject("has no access to camera.");
+        }
+      } catch (e) {
+        reject(e);
       }
     });
   }
@@ -45,13 +69,9 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     const video = <HTMLVideoElement>document.getElementById("video");
     video.pause();
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      // Not adding `{ audio: true }` since we only want video now
-      navigator.mediaDevices
-        .getUserMedia({ video: true })
+      navigator.mediaDevices.getUserMedia(this.streamOptions)
         .then(function(stream: MediaStream) {
-          //video.src = window.URL.createObjectURL(stream);
           const tracks = stream.getTracks();
-          console.log(tracks);
           tracks.forEach(track => {
             track.stop();
             stream.removeTrack(track);
@@ -62,6 +82,20 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
           video.parentNode.removeChild(video);
         });
     }
+  }
+
+  async flip(): Promise<any> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        await this.stop();
+        this.streamOptions.camera = this.streamOptions.camera === "rear" ? "front" : "rear";
+        this.streamToVideoElement(this.streamOptions);
+        resolve(this.streamOptions.camera);
+      } catch (e) {
+        reject(e);
+      }
+    });
+
   }
 
   async capture(): Promise<any> {
