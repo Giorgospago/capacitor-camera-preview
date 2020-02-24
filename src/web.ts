@@ -50,6 +50,11 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
           };
           const video = <HTMLVideoElement>document.getElementById("video");
           navigator.mediaDevices.getUserMedia(userMediaOptions).then((stream) => {
+            if (options.camera === "front") {
+              video.setAttribute("style", "-webkit-transform: scaleX(-1);transform: scaleX(-1);")
+            } else {
+              video.setAttribute("style", "");
+            }
             video.srcObject = stream;
             video.play();
             resolve();
@@ -69,18 +74,17 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     const video = <HTMLVideoElement>document.getElementById("video");
     video.pause();
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia(this.streamOptions)
-        .then(function(stream: MediaStream) {
-          const tracks = stream.getTracks();
-          tracks.forEach(track => {
-            track.stop();
-            stream.removeTrack(track);
-          });
-
-          video.src = "";
-          video.pause();
-          video.parentNode.removeChild(video);
+      navigator.mediaDevices.getUserMedia(this.streamOptions).then((stream: MediaStream) => {
+        const tracks = stream.getTracks();
+        tracks.forEach(track => {
+          track.stop();
+          stream.removeTrack(track);
         });
+
+        video.src = "";
+        video.pause();
+        video.parentNode.removeChild(video);
+      });
     }
   }
 
